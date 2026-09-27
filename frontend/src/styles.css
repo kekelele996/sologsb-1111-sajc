@@ -29,3 +29,8 @@ a {
 .conflict-row > td {
   background: #fff1f0 !important;
 }
+
+/* 送检台账：逾期样品高亮 */
+.overdue-row > td {
+  background: #fff7e6 !important;
+}

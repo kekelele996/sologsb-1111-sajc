@@ -3,10 +3,12 @@ import type { DrillHole } from '../types/drill-hole';
 import type { DrillRun } from '../types/drill-run';
 import type { CoreBox } from '../types/core-box';
 import type { LithoLog } from '../types/litho-log';
+import type { SampleSubmission, SubmissionEvent } from '../types/sample-submission';
 import { footageOf, recoveryOf } from './recovery';
 
 const DAY = 86_400_000;
 const daysAgo = (n: number) => new Date(Date.now() - n * DAY).toISOString();
+const daysAhead = (n: number) => new Date(Date.now() + n * DAY).toISOString();
 
 export const SEED_HOLES: DrillHole[] = [
   {
@@ -167,24 +169,147 @@ export const SEED_LITHOS: LithoLog[] = [
   { id: 'litho-018', holeId: 'hole-005', fromDepth: 11, toDepth: 45, lithology: '花岗闪长岩', color: '灰白色', alteration: '硅化', mineralization: '无', rqd: 87, sampleNo: 'YP-2405-01', logger: '吴倩' },
 ];
 
+/** 送检台账事件（种子数据用固定 id，便于追溯） */
+function evt(id: string, type: SubmissionEvent['type'], at: string, operator: string, note?: string): SubmissionEvent {
+  return { id, type, at, operator, note };
+}
+
+/** 按样品号从岩性编录取区间信息，构建送检台账示例（覆盖各状态与两种逾期情形） */
+function buildSubmissions(): SampleSubmission[] {
+  const byNo = new Map(SEED_LITHOS.filter((log) => log.sampleNo).map((log) => [log.sampleNo, log]));
+  const of = (sampleNo: string) => {
+    const log = byNo.get(sampleNo);
+    if (!log) throw new Error(`种子数据缺少样品号 ${sampleNo} 对应的岩性区间`);
+    return log;
+  };
+
+  return [
+    {
+      id: 'sub-001', ...(() => { const l = of('YP-2402-01'); return { sampleNo: l.sampleNo, holeId: l.holeId, lithoId: l.id, fromDepth: l.fromDepth, toDepth: l.toDepth }; })(),
+      assayType: '基本分析(化学样)', weightKg: 3.2, receiverOrg: '省岩矿测试中心', expectedAt: daysAgo(10), sender: '陈立',
+      status: 'completed', sentAt: daysAgo(25), receivedAt: daysAgo(24), receivedBy: '王工', resultAt: daysAgo(12),
+      resultSummary: 'Cu 0.12%、TFe 3.4%，未见工业矿化',
+      events: [
+        evt('evt-001-1', 'sent', daysAgo(25), '陈立'),
+        evt('evt-001-2', 'received', daysAgo(24), '王工'),
+        evt('evt-001-3', 'completed', daysAgo(12), '陈立', 'Cu 0.12%、TFe 3.4%，未见工业矿化'),
+      ],
+    },
+    {
+      id: 'sub-002', ...(() => { const l = of('YP-2402-02'); return { sampleNo: l.sampleNo, holeId: l.holeId, lithoId: l.id, fromDepth: l.fromDepth, toDepth: l.toDepth }; })(),
+      assayType: '基本分析(化学样)', weightKg: 2.8, receiverOrg: '省岩矿测试中心', expectedAt: daysAgo(8), sender: '陈立',
+      status: 'completed', sentAt: daysAgo(22), receivedAt: daysAgo(21), receivedBy: '王工', resultAt: daysAgo(9),
+      resultSummary: 'TFe 28.6%、mFe 24.1%，达边界品位',
+      events: [
+        evt('evt-002-1', 'sent', daysAgo(22), '陈立'),
+        evt('evt-002-2', 'received', daysAgo(21), '王工'),
+        evt('evt-002-3', 'completed', daysAgo(9), '陈立', 'TFe 28.6%、mFe 24.1%，达边界品位'),
+      ],
+    },
+    {
+      id: 'sub-003', ...(() => { const l = of('YP-2402-03'); return { sampleNo: l.sampleNo, holeId: l.holeId, lithoId: l.id, fromDepth: l.fromDepth, toDepth: l.toDepth }; })(),
+      assayType: '组合分析', weightKg: 4.0, receiverOrg: '中南地质实验室', expectedAt: daysAgo(3), sender: '陈立',
+      status: 'returned', sentAt: daysAgo(18), receivedAt: daysAgo(17), receivedBy: '刘工', returnedAt: daysAgo(6),
+      returnReason: '样品重量不足且混入围岩，需重新劈半取样',
+      events: [
+        evt('evt-003-1', 'sent', daysAgo(18), '陈立'),
+        evt('evt-003-2', 'received', daysAgo(17), '刘工'),
+        evt('evt-003-3', 'returned', daysAgo(6), '陈立', '样品重量不足且混入围岩，需重新劈半取样'),
+      ],
+    },
+    {
+      id: 'sub-004', ...(() => { const l = of('YP-2403-01'); return { sampleNo: l.sampleNo, holeId: l.holeId, lithoId: l.id, fromDepth: l.fromDepth, toDepth: l.toDepth }; })(),
+      assayType: '薄片鉴定', weightKg: 1.5, receiverOrg: '省岩矿测试中心', expectedAt: daysAgo(4), sender: '吴倩',
+      status: 'completed', sentAt: daysAgo(20), receivedAt: daysAgo(19), receivedBy: '王工', resultAt: daysAgo(5),
+      resultSummary: '定名绿泥石化花岗闪长岩，副矿物见磁铁矿',
+      events: [
+        evt('evt-004-1', 'sent', daysAgo(20), '吴倩'),
+        evt('evt-004-2', 'received', daysAgo(19), '王工'),
+        evt('evt-004-3', 'completed', daysAgo(5), '吴倩', '定名绿泥石化花岗闪长岩，副矿物见磁铁矿'),
+      ],
+    },
+    {
+      id: 'sub-005', ...(() => { const l = of('YP-2403-02'); return { sampleNo: l.sampleNo, holeId: l.holeId, lithoId: l.id, fromDepth: l.fromDepth, toDepth: l.toDepth }; })(),
+      assayType: '岩石力学', weightKg: 6.5, receiverOrg: '华北物化探测试所', expectedAt: daysAgo(2), sender: '吴倩',
+      status: 'sent', sentAt: daysAgo(10),
+      remark: '破碎带样，注意运输防散',
+      events: [evt('evt-005-1', 'sent', daysAgo(10), '吴倩', '破碎带样，注意运输防散')],
+    },
+    {
+      id: 'sub-006', ...(() => { const l = of('YP-2403-03'); return { sampleNo: l.sampleNo, holeId: l.holeId, lithoId: l.id, fromDepth: l.fromDepth, toDepth: l.toDepth }; })(),
+      assayType: '物相分析', weightKg: 2.0, receiverOrg: '省岩矿测试中心', expectedAt: daysAgo(1), sender: '吴倩',
+      status: 'received', sentAt: daysAgo(15), receivedAt: daysAgo(14), receivedBy: '王工',
+      events: [
+        evt('evt-006-1', 'sent', daysAgo(15), '吴倩'),
+        evt('evt-006-2', 'received', daysAgo(14), '王工'),
+      ],
+    },
+    {
+      id: 'sub-007', ...(() => { const l = of('YP-2404-01'); return { sampleNo: l.sampleNo, holeId: l.holeId, lithoId: l.id, fromDepth: l.fromDepth, toDepth: l.toDepth }; })(),
+      assayType: '基本分析(化学样)', weightKg: 3.0, receiverOrg: '中南地质实验室', expectedAt: daysAgo(2), sender: '赵晓峰',
+      status: 'completed', sentAt: daysAgo(16), receivedAt: daysAgo(15), receivedBy: '刘工', resultAt: daysAgo(3),
+      resultSummary: 'TFe 18.2%、S 0.8%，磁铁矿化均匀',
+      events: [
+        evt('evt-007-1', 'sent', daysAgo(16), '赵晓峰'),
+        evt('evt-007-2', 'received', daysAgo(15), '刘工'),
+        evt('evt-007-3', 'completed', daysAgo(3), '赵晓峰', 'TFe 18.2%、S 0.8%，磁铁矿化均匀'),
+      ],
+    },
+    {
+      id: 'sub-008', ...(() => { const l = of('YP-2401-01'); return { sampleNo: l.sampleNo, holeId: l.holeId, lithoId: l.id, fromDepth: l.fromDepth, toDepth: l.toDepth }; })(),
+      assayType: '基本分析(化学样)', weightKg: 3.4, receiverOrg: '省岩矿测试中心', expectedAt: daysAhead(5), sender: '陈立',
+      status: 'received', sentAt: daysAgo(7), receivedAt: daysAgo(6), receivedBy: '王工',
+      events: [
+        evt('evt-008-1', 'sent', daysAgo(7), '陈立'),
+        evt('evt-008-2', 'received', daysAgo(6), '王工'),
+      ],
+    },
+    {
+      id: 'sub-009', ...(() => { const l = of('YP-2401-02'); return { sampleNo: l.sampleNo, holeId: l.holeId, lithoId: l.id, fromDepth: l.fromDepth, toDepth: l.toDepth }; })(),
+      assayType: '组合分析', weightKg: 4.2, receiverOrg: '中南地质实验室', expectedAt: daysAhead(10), sender: '陈立',
+      status: 'sent', sentAt: daysAgo(3),
+      events: [evt('evt-009-1', 'sent', daysAgo(3), '陈立')],
+    },
+    {
+      id: 'sub-010', ...(() => { const l = of('YP-2405-01'); return { sampleNo: l.sampleNo, holeId: l.holeId, lithoId: l.id, fromDepth: l.fromDepth, toDepth: l.toDepth }; })(),
+      assayType: '基本分析(化学样)', weightKg: 2.6, receiverOrg: '省岩矿测试中心', expectedAt: daysAhead(12), sender: '吴倩',
+      status: 'received', sentAt: daysAgo(4), receivedAt: daysAgo(3), receivedBy: '王工',
+      events: [
+        evt('evt-010-1', 'sent', daysAgo(4), '吴倩'),
+        evt('evt-010-2', 'received', daysAgo(3), '王工'),
+      ],
+    },
+    {
+      id: 'sub-011', ...(() => { const l = of('YP-2402-04'); return { sampleNo: l.sampleNo, holeId: l.holeId, lithoId: l.id, fromDepth: l.fromDepth, toDepth: l.toDepth }; })(),
+      assayType: '基本分析(化学样)', weightKg: 3.8, receiverOrg: '中南地质实验室', expectedAt: daysAhead(6), sender: '陈立',
+      status: 'sent', sentAt: daysAgo(2),
+      events: [evt('evt-011-1', 'sent', daysAgo(2), '陈立')],
+    },
+  ];
+}
+
+export const SEED_SUBMISSIONS: SampleSubmission[] = buildSubmissions();
+
 /** 首次打开（表内无数据）时写入示例数据；已有数据则不动 */
 export async function seedIfEmpty(): Promise<void> {
   const flag = await db.meta.get('seeded');
   if (flag) {
     return;
   }
-  const [holeCount, runCount, boxCount, lithoCount] = await Promise.all([
+  const [holeCount, runCount, boxCount, lithoCount, submissionCount] = await Promise.all([
     db.holes.count(),
     db.runs.count(),
     db.boxes.count(),
     db.lithos.count(),
+    db.submissions.count(),
   ]);
 
-  await db.transaction('rw', db.holes, db.runs, db.boxes, db.lithos, db.meta, async () => {
+  await db.transaction('rw', [db.holes, db.runs, db.boxes, db.lithos, db.submissions, db.meta], async () => {
     if (holeCount === 0) await db.holes.bulkPut(SEED_HOLES);
     if (runCount === 0) await db.runs.bulkPut(SEED_RUNS);
     if (boxCount === 0) await db.boxes.bulkPut(SEED_BOXES);
     if (lithoCount === 0) await db.lithos.bulkPut(SEED_LITHOS);
+    if (submissionCount === 0) await db.submissions.bulkPut(SEED_SUBMISSIONS);
     await db.meta.put({ key: 'seeded', value: new Date().toISOString() });
   });
 }

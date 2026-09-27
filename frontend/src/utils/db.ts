@@ -3,18 +3,20 @@ import type { DrillHole } from '../types/drill-hole';
 import type { DrillRun } from '../types/drill-run';
 import type { CoreBox } from '../types/core-box';
 import type { LithoLog } from '../types/litho-log';
+import type { SampleSubmission } from '../types/sample-submission';
 
 /** IndexedDB 库名（浏览器本地存储，无后端） */
 export const DB_NAME = 'gbdrillcore-db';
 
 /** 当前 schema 版本，与 db.version(n) 对应 */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 class DrillCoreDB extends Dexie {
   holes!: Table<DrillHole, string>;
   runs!: Table<DrillRun, string>;
   boxes!: Table<CoreBox, string>;
   lithos!: Table<LithoLog, string>;
+  submissions!: Table<SampleSubmission, string>;
   meta!: Table<{ key: string; value: string }, string>;
 
   constructor() {
@@ -49,6 +51,16 @@ class DrillCoreDB extends Dexie {
             }
           });
       });
+
+    // v3：新增样品送检台账表，样品号 sampleNo 唯一索引（同一编号不能重复送检登记）。
+    this.version(3).stores({
+      holes: 'id, holeNo, rigNo, shift, startDate',
+      runs: 'id, runNo, holeId, fromDepth, toDepth, shift',
+      boxes: 'id, boxNo, holeId, shelfPos, boxedAt',
+      lithos: 'id, holeId, fromDepth, toDepth, [holeId+fromDepth], lithology',
+      submissions: 'id, sampleNo, holeId, lithoId, status, expectedAt, sentAt',
+      meta: 'key',
+    });
   }
 }
 
