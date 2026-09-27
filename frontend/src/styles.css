@@ -29,3 +29,12 @@ a {
 .conflict-row > td {
   background: #fff1f0 !important;
 }
+
+/* 送检台账：逾期行与待送行高亮 */
+.sample-overdue-row > td {
+  background: #fff7e6 !important;
+}
+
+.sample-pending-row > td {
+  background: #fafbfc !important;
+}

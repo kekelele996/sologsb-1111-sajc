@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { Alert, Button, Card, Col, Progress, Row, Space, Table, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Col, Progress, Row, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import type { TableColumnsType } from 'antd';
+import dayjs from 'dayjs';
 import { Link } from 'react-router-dom';
 import StatBadge from '../components/common/StatBadge';
 import RecoveryBadge from '../components/common/RecoveryBadge';
@@ -8,16 +9,21 @@ import FilterBar from '../components/common/FilterBar';
 import { useHoleFilter } from '../hooks/useHoleFilter';
 import { useHoleStore, holeProgressList } from '../stores/holeStore';
 import { useRunStore, anomalyList } from '../stores/runStore';
+import { useLithoStore } from '../stores/lithoStore';
+import { useSampleStore } from '../stores/sampleStore';
 import { RIG_NOS, SHIFTS, type HoleProgress } from '../types/drill-hole';
 import type { RunAnomaly } from '../types/drill-run';
 import { isAnomaly } from '../utils/recovery';
+import { summarizeSamplesByHole, type HoleSampleSummary } from '../utils/sample';
 
 const { Title, Paragraph, Text } = Typography;
 
-/** 工作台：钻孔进度与采取率异常清单（低于 75% 标红） */
+/** 工作台：钻孔进度、采取率异常清单与样品送检汇总（逾期未接收 / 未出结果单独提醒） */
 export default function HoleBoard() {
   const holes = useHoleStore((s) => s.holes);
   const runs = useRunStore((s) => s.runs);
+  const lithos = useLithoStore((s) => s.lithos);
+  const samples = useSampleStore((s) => s.samples);
   const filter = useHoleFilter();
 
   const visibleHoles = useMemo(() => filter.apply(holes), [holes, filter]);
@@ -27,6 +33,12 @@ export default function HoleBoard() {
   const anomalies = useMemo<RunAnomaly[]>(
     () => anomalyList(runs.filter((run) => filter.matchRun(run, holes)), holeNoOf),
     [runs, holes, filter],
+  );
+
+  const sampleSummaries = useMemo(() => summarizeSamplesByHole(visibleHoles, lithos, samples), [visibleHoles, lithos, samples]);
+  const overdueSamples = useMemo(
+    () => sampleSummaries.flatMap((summary) => summary.overdue).sort((a, b) => b.days - a.days),
+    [sampleSummaries],
   );
 
   const inDrilling = progress.filter((item) => !item.finished).length;
@@ -90,6 +102,81 @@ export default function HoleBoard() {
     { title: '处置建议', render: (_, row) => <Text type="danger">{row.advice}</Text> },
   ];
 
+  const sampleColumns: TableColumnsType<HoleSampleSummary> = [
+    { title: '孔号', width: 110, render: (_, row) => <Text strong>{row.hole.holeNo}</Text> },
+    {
+      title: '待送',
+      width: 150,
+      render: (_, row) =>
+        row.pending.length ? (
+          <Tooltip title={row.pending.map((p) => p.litho.sampleNo).join('、')}>
+            <Tag color="default">{row.pending.length} 件待送</Tag>
+          </Tooltip>
+        ) : (
+          <Text type="secondary">0</Text>
+        ),
+    },
+    {
+      title: '在检',
+      width: 150,
+      render: (_, row) => {
+        const count = row.sent.length + row.received.length;
+        return count ? (
+          <Tooltip title={[...row.sent, ...row.received].map((s) => s.sampleNo).join('、')}>
+            <Tag color="blue">{count} 件在检</Tag>
+          </Tooltip>
+        ) : (
+          <Text type="secondary">0</Text>
+        );
+      },
+    },
+    {
+      title: '退回补采',
+      width: 130,
+      render: (_, row) =>
+        row.returned.length ? (
+          <Tooltip title={row.returned.map((s) => `${s.sampleNo}：${s.returnReason ?? ''}`).join('；')}>
+            <Tag color="red">{row.returned.length} 件退回</Tag>
+          </Tooltip>
+        ) : (
+          <Text type="secondary">0</Text>
+        ),
+    },
+    {
+      title: '已完成',
+      width: 130,
+      render: (_, row) =>
+        row.completed.length ? <Tag color="green">{row.completed.length} 件完成</Tag> : <Text type="secondary">0</Text>,
+    },
+    {
+      title: '逾期',
+      width: 170,
+      render: (_, row) =>
+        row.overdue.length ? (
+          <Tooltip
+            title={row.overdue
+              .map((o) => `${o.sample.sampleNo}：${o.kind === 'receive' ? '逾期未接收' : '逾期未出结果'} ${o.days} 天`)
+              .join('；')}
+          >
+            <Tag color="red">{row.overdue.length} 件逾期</Tag>
+          </Tooltip>
+        ) : (
+          <Tag color="green">无逾期</Tag>
+        ),
+    },
+    {
+      title: '操作',
+      width: 110,
+      render: (_, row) => (
+        <Link to={`/samples?hole=${row.hole.id}`}>
+          <Button size="small" type="link">
+            送检台账
+          </Button>
+        </Link>
+      ),
+    },
+  ];
+
   return (
     <div>
       <Title level={3} style={{ marginBottom: 4 }}>
@@ -132,6 +219,25 @@ export default function HoleBoard() {
               {supplement.map((item) => (
                 <Tag key={item.hole.id} color="red">
                   {item.hole.holeNo}：终孔 {item.hole.finalDepth}m / 设计 {item.hole.designDepth}m（差 {(item.hole.designDepth - item.hole.finalDepth).toFixed(1)}m）
+                </Tag>
+              ))}
+            </Space>
+          }
+        />
+      ) : null}
+
+      {overdueSamples.length > 0 ? (
+        <Alert
+          style={{ marginBottom: 16 }}
+          type="error"
+          showIcon
+          message={`送检逾期提醒：${overdueSamples.length} 件样品逾期未接收或未出结果（预计回件日已过）`}
+          description={
+            <Space wrap>
+              {overdueSamples.map(({ sample, kind, days }) => (
+                <Tag key={sample.id} color="red">
+                  {holeNoOf(sample.holeId)} · {sample.sampleNo}（{kind === 'receive' ? `未接收 ${days} 天` : `未出结果 ${days} 天`}，应于{' '}
+                  {dayjs(sample.expectedAt).format('YYYY-MM-DD')} 回件）
                 </Tag>
               ))}
             </Space>
@@ -195,6 +301,29 @@ export default function HoleBoard() {
           </Card>
         </Col>
       </Row>
+
+      <Card
+        title="样品送检汇总（按孔）"
+        size="small"
+        style={{ marginTop: 16 }}
+        extra={
+          <Link to="/samples">
+            <Button size="small" type="primary">
+              去送检台账
+            </Button>
+          </Link>
+        }
+      >
+        <Table
+          rowKey={(row) => row.hole.id}
+          size="small"
+          columns={sampleColumns}
+          dataSource={sampleSummaries}
+          pagination={{ pageSize: 6, hideOnSinglePage: true }}
+          scroll={{ x: 980 }}
+          locale={{ emptyText: '暂无钻孔，无法汇总送检情况' }}
+        />
+      </Card>
     </div>
   );
 }

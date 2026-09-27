@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Alert, App as AntApp, Button, Card, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Table, Tag, Typography } from 'antd';
 import type { TableColumnsType } from 'antd';
+import { Link } from 'react-router-dom';
 import DepthRangeInput from '../components/common/DepthRangeInput';
 import LithoColumn from '../components/common/LithoColumn';
 import EmptyPanel from '../components/common/EmptyPanel';
 import { useHoleStore } from '../stores/holeStore';
 import { useRunStore } from '../stores/runStore';
 import { useLithoStore } from '../stores/lithoStore';
+import { useSampleStore } from '../stores/sampleStore';
+import { SAMPLE_STATUS_META } from '../types/sample-dispatch';
 import {
   ALTERATIONS,
   LITHOLOGIES,
@@ -46,6 +49,7 @@ export default function LithoEditor() {
   const updateLitho = useLithoStore((s) => s.updateLitho);
   const removeLitho = useLithoStore((s) => s.removeLitho);
   const checkConflicts = useLithoStore((s) => s.checkConflicts);
+  const samples = useSampleStore((s) => s.samples);
 
   const [form] = Form.useForm<LithoFormValues>();
   const [open, setOpen] = useState(false);
@@ -166,7 +170,31 @@ export default function LithoEditor() {
     { title: '蚀变', dataIndex: 'alteration', width: 110 },
     { title: '矿化', dataIndex: 'mineralization', width: 100 },
     { title: 'RQD(%)', dataIndex: 'rqd', width: 90, align: 'right', render: (v: number) => <Text type={v < 50 ? 'danger' : undefined}>{v}</Text> },
-    { title: '样品号', dataIndex: 'sampleNo', width: 130, render: (v: string) => v || '-' },
+    {
+      title: '样品号',
+      dataIndex: 'sampleNo',
+      width: 170,
+      render: (v: string) => {
+        if (!v) return '-';
+        const dispatch = samples.find((s) => s.sampleNo === v);
+        return (
+          <Space size={4}>
+            <span>{v}</span>
+            {dispatch ? (
+              <Link to={`/samples?kw=${encodeURIComponent(v)}`}>
+                <Tag color={SAMPLE_STATUS_META[dispatch.status].color} style={{ cursor: 'pointer' }}>
+                  {SAMPLE_STATUS_META[dispatch.status].label}
+                </Tag>
+              </Link>
+            ) : (
+              <Link to={`/samples?kw=${encodeURIComponent(v)}`}>
+                <Tag style={{ cursor: 'pointer' }}>待送</Tag>
+              </Link>
+            )}
+          </Space>
+        );
+      },
+    },
     { title: '编录人', dataIndex: 'logger', width: 90 },
     { title: '备注', dataIndex: 'remark', ellipsis: true, render: (v?: string) => v ?? '-' },
     {

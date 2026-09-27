@@ -3,10 +3,12 @@ import type { DrillHole } from '../types/drill-hole';
 import type { DrillRun } from '../types/drill-run';
 import type { CoreBox } from '../types/core-box';
 import type { LithoLog } from '../types/litho-log';
+import type { SampleDispatch, SampleEvent, SampleStatus } from '../types/sample-dispatch';
 import { footageOf, recoveryOf } from './recovery';
 
 const DAY = 86_400_000;
 const daysAgo = (n: number) => new Date(Date.now() - n * DAY).toISOString();
+const daysFromNow = (n: number) => new Date(Date.now() + n * DAY).toISOString();
 
 export const SEED_HOLES: DrillHole[] = [
   {
@@ -167,24 +169,188 @@ export const SEED_LITHOS: LithoLog[] = [
   { id: 'litho-018', holeId: 'hole-005', fromDepth: 11, toDepth: 45, lithology: '花岗闪长岩', color: '灰白色', alteration: '硅化', mineralization: '无', rqd: 87, sampleNo: 'YP-2405-01', logger: '吴倩' },
 ];
 
+function sampleEvent(seq: number, sampleNo: string, type: SampleStatus, at: string, operator: string, note?: string): SampleEvent {
+  return { id: `evt-${sampleNo}-${seq}`, type, at, operator, note };
+}
+
+/** 送检台账示例：覆盖在检/签收/退回/完成，并含逾期未接收与逾期未出结果各一件 */
+export const SEED_SAMPLES: SampleDispatch[] = [
+  {
+    id: 'smp-001',
+    sampleNo: 'YP-2402-03',
+    holeId: 'hole-002',
+    lithoId: 'litho-004',
+    fromDepth: 96,
+    toDepth: 132,
+    lithology: '大理岩',
+    sampleType: '化学分析样',
+    weight: 2.4,
+    lab: '省地质测试中心',
+    sentAt: daysAgo(20),
+    expectedAt: daysAgo(8),
+    sender: '陈立',
+    status: 'completed',
+    receivedAt: daysAgo(17),
+    receiver: '林芳',
+    resultAt: daysAgo(9),
+    resultSummary: 'Cu 0.78%、TFe 26.4%，达到工业品位，建议加密取样。',
+    events: [
+      sampleEvent(1, 'YP-2402-03', 'sent', daysAgo(20), '陈立', '送 省地质测试中心'),
+      sampleEvent(2, 'YP-2402-03', 'received', daysAgo(17), '林芳', '实验室签收'),
+      sampleEvent(3, 'YP-2402-03', 'completed', daysAgo(9), '林芳', 'Cu 0.78%、TFe 26.4%，达到工业品位，建议加密取样。'),
+    ],
+  },
+  {
+    id: 'smp-002',
+    sampleNo: 'YP-2402-04',
+    holeId: 'hole-002',
+    lithoId: 'litho-005',
+    fromDepth: 132,
+    toDepth: 168,
+    lithology: '矽卡岩',
+    sampleType: '化学分析样',
+    weight: 2.1,
+    lab: '省地质测试中心',
+    sentAt: daysAgo(20),
+    expectedAt: daysAgo(8),
+    sender: '陈立',
+    status: 'completed',
+    receivedAt: daysAgo(16),
+    receiver: '林芳',
+    resultAt: daysAgo(8),
+    resultSummary: 'Cu 1.24%、TFe 34.1%，为主矿体平均品位。',
+    events: [
+      sampleEvent(1, 'YP-2402-04', 'sent', daysAgo(20), '陈立', '送 省地质测试中心'),
+      sampleEvent(2, 'YP-2402-04', 'received', daysAgo(16), '林芳', '实验室签收'),
+      sampleEvent(3, 'YP-2402-04', 'completed', daysAgo(8), '林芳', 'Cu 1.24%、TFe 34.1%，为主矿体平均品位。'),
+    ],
+  },
+  {
+    id: 'smp-003',
+    sampleNo: 'YP-2403-03',
+    holeId: 'hole-003',
+    lithoId: 'litho-010',
+    fromDepth: 118,
+    toDepth: 205,
+    lithology: '矽卡岩',
+    sampleType: '化学分析样',
+    weight: 3.6,
+    lab: '中实国联检测',
+    sentAt: daysAgo(14),
+    expectedAt: daysAgo(2),
+    sender: '吴倩',
+    status: 'received',
+    receivedAt: daysAgo(11),
+    receiver: '郑海',
+    events: [
+      sampleEvent(1, 'YP-2403-03', 'sent', daysAgo(14), '吴倩', '送 中实国联检测'),
+      sampleEvent(2, 'YP-2403-03', 'received', daysAgo(11), '郑海', '实验室签收'),
+    ],
+    remark: '主矿化段，已催问结果',
+  },
+  {
+    id: 'smp-004',
+    sampleNo: 'YP-2401-01',
+    holeId: 'hole-001',
+    lithoId: 'litho-015',
+    fromDepth: 9,
+    toDepth: 86,
+    lithology: '花岗闪长岩',
+    sampleType: '岩矿鉴定样',
+    weight: 1.2,
+    lab: '华勘岩矿鉴定室',
+    sentAt: daysAgo(12),
+    expectedAt: daysAgo(4),
+    sender: '陈立',
+    status: 'sent',
+    events: [sampleEvent(1, 'YP-2401-01', 'sent', daysAgo(12), '陈立', '送 华勘岩矿鉴定室')],
+  },
+  {
+    id: 'smp-005',
+    sampleNo: 'YP-2403-02',
+    holeId: 'hole-003',
+    lithoId: 'litho-009',
+    fromDepth: 74,
+    toDepth: 118,
+    lithology: '断层角砾岩',
+    sampleType: '薄片样',
+    weight: 0.8,
+    lab: '华勘岩矿鉴定室',
+    sentAt: daysAgo(18),
+    expectedAt: daysAgo(6),
+    sender: '吴倩',
+    status: 'returned',
+    receivedAt: daysAgo(15),
+    receiver: '许敏',
+    returnedAt: daysAgo(10),
+    returnReason: '样品破碎且代表性不足，薄片无法制片，需在 74~118m 重新拣块补采。',
+    events: [
+      sampleEvent(1, 'YP-2403-02', 'sent', daysAgo(18), '吴倩', '送 华勘岩矿鉴定室'),
+      sampleEvent(2, 'YP-2403-02', 'received', daysAgo(15), '许敏', '实验室签收'),
+      sampleEvent(3, 'YP-2403-02', 'returned', daysAgo(10), '许敏', '样品破碎且代表性不足，薄片无法制片，需在 74~118m 重新拣块补采。'),
+    ],
+  },
+  {
+    id: 'smp-006',
+    sampleNo: 'YP-2401-02',
+    holeId: 'hole-001',
+    lithoId: 'litho-016',
+    fromDepth: 86,
+    toDepth: 155,
+    lithology: '矽卡岩',
+    sampleType: '外检样',
+    weight: 2.8,
+    lab: '第三方外检实验室',
+    sentAt: daysAgo(3),
+    expectedAt: daysFromNow(10),
+    sender: '陈立',
+    status: 'sent',
+    events: [sampleEvent(1, 'YP-2401-02', 'sent', daysAgo(3), '陈立', '送 第三方外检实验室')],
+  },
+  {
+    id: 'smp-007',
+    sampleNo: 'YP-2405-01',
+    holeId: 'hole-005',
+    lithoId: 'litho-018',
+    fromDepth: 11,
+    toDepth: 45,
+    lithology: '花岗闪长岩',
+    sampleType: '化学分析样',
+    weight: 1.6,
+    lab: '省地质测试中心',
+    sentAt: daysAgo(2),
+    expectedAt: daysFromNow(11),
+    sender: '吴倩',
+    status: 'received',
+    receivedAt: daysAgo(1),
+    receiver: '林芳',
+    events: [
+      sampleEvent(1, 'YP-2405-01', 'sent', daysAgo(2), '吴倩', '送 省地质测试中心'),
+      sampleEvent(2, 'YP-2405-01', 'received', daysAgo(1), '林芳', '实验室签收'),
+    ],
+  },
+];
+
 /** 首次打开（表内无数据）时写入示例数据；已有数据则不动 */
 export async function seedIfEmpty(): Promise<void> {
   const flag = await db.meta.get('seeded');
   if (flag) {
     return;
   }
-  const [holeCount, runCount, boxCount, lithoCount] = await Promise.all([
+  const [holeCount, runCount, boxCount, lithoCount, sampleCount] = await Promise.all([
     db.holes.count(),
     db.runs.count(),
     db.boxes.count(),
     db.lithos.count(),
+    db.samples.count(),
   ]);
 
-  await db.transaction('rw', db.holes, db.runs, db.boxes, db.lithos, db.meta, async () => {
+  await db.transaction('rw', [db.holes, db.runs, db.boxes, db.lithos, db.samples, db.meta], async () => {
     if (holeCount === 0) await db.holes.bulkPut(SEED_HOLES);
     if (runCount === 0) await db.runs.bulkPut(SEED_RUNS);
     if (boxCount === 0) await db.boxes.bulkPut(SEED_BOXES);
     if (lithoCount === 0) await db.lithos.bulkPut(SEED_LITHOS);
+    if (sampleCount === 0) await db.samples.bulkPut(SEED_SAMPLES);
     await db.meta.put({ key: 'seeded', value: new Date().toISOString() });
   });
 }

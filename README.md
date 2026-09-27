@@ -1,6 +1,6 @@
 # 矿区钻孔岩芯编目台（gbdrillcore）
 
-面向地质勘查钻探班组与地质编录员：登记钻孔台帐、回次进尺与采取率、岩芯箱箱位，并按深度区间编录岩性描述与样品。纯前端单页应用，数据全部保存在浏览器本地，不依赖任何后端服务或外部接口。
+面向地质勘查钻探班组与地质编录员：登记钻孔台帐、回次进尺与采取率、岩芯箱箱位，按深度区间编录岩性描述与样品，并对编录样品做送检台账管理（送检 → 实验室签收 → 结果回录，支持退回补采与逾期提醒）。纯前端单页应用，数据全部保存在浏览器本地，不依赖任何后端服务或外部接口。
 
 ## Docker 一键启动
 
@@ -24,8 +24,8 @@ docker compose down
 | 框架 | React 18 + TypeScript |
 | 构建 | Vite 6（`npm run build` 含 `tsc --noEmit` 类型检查） |
 | UI | Ant Design 5 + @ant-design/icons |
-| 路由 | React Router 6（5 条业务路由 + 404） |
-| 状态 | Zustand（holeStore / runStore / boxStore / lithoStore） |
+| 路由 | React Router 6（6 条业务路由 + 404） |
+| 状态 | Zustand（holeStore / runStore / boxStore / lithoStore / sampleStore） |
 | 存储 | IndexedDB（Dexie，库名 `gbdrillcore-db`） |
 | 托管 | nginx:alpine（多阶段构建，SPA try_files + gzip） |
 
@@ -49,28 +49,29 @@ npm run build    # 类型检查 + 生产构建
 │   ├── nginx.conf             # try_files SPA 回退 + gzip
 │   ├── public/favicon.svg
 │   └── src/
-│       ├── types/             # drill-hole / drill-run / core-box / litho-log
-│       ├── stores/            # holeStore / runStore / boxStore / lithoStore
+│       ├── types/             # drill-hole / drill-run / core-box / litho-log / sample-dispatch
+│       ├── stores/            # holeStore / runStore / boxStore / lithoStore / sampleStore
 │       ├── components/common/ # DepthRangeInput / RecoveryBadge / BoxGrid / LithoColumn / StatBadge / FilterBar / EmptyPanel
 │       ├── hooks/             # useHoleFilter / useDepthCalc
-│       ├── pages/             # HoleBoard / HoleList / RunLog / CoreBoxList / LithoEditor
+│       ├── pages/             # HoleBoard / HoleList / RunLog / CoreBoxList / LithoEditor / SampleLedger
 │       ├── router/index.tsx   # 路由表
-│       └── utils/             # recovery.ts / db.ts / export.ts（+ seed.ts / id.ts）
+│       └── utils/             # recovery.ts / sample.ts / db.ts / export.ts（+ seed.ts / id.ts）
 ```
 
 ## 功能与路由
 
 | 路由 | 页面 | 说明 |
 | --- | --- | --- |
-| `/` | 工作台 | 钻孔进度、设计达成率、未达设计待补勘清单、采取率异常清单（<75% 标红） |
+| `/` | 工作台 | 钻孔进度、设计达成率、未达设计待补勘清单、采取率异常清单（<75% 标红）、样品送检按孔汇总与送检逾期提醒 |
 | `/holes` | 钻孔台帐 | 建孔、坐标与孔口标高、设计/终孔深度、测斜数据、回次深度覆盖与岩芯箱数回显 |
 | `/runs` | 回次记录 | 起止深度自动算进尺与采取率，低于 75% 立即标红并入异常清单 |
 | `/boxes` | 岩芯箱编目 | 格位网格按深度填充、破损格标记、装箱深度连续性与格位容量校验 |
-| `/lithology` | 岩性编录 | 按深度区间编录岩性/蚀变/矿化/RQD/样品，区间重叠报冲突并高亮，SVG 岩性柱状图 |
+| `/lithology` | 岩性编录 | 按深度区间编录岩性/蚀变/矿化/RQD/样品，区间重叠报冲突并高亮，SVG 岩性柱状图，样品号联动送检状态 |
+| `/samples` | 送检台账 | 选已有岩性区间登记送检（类型/重量/收样单位/预计回件日期），登记接收、退回补采（必填原因）与结果回录；同一编号不可重复，逾期未接收/未出结果单独提醒，筛选结果可导出 CSV 归档 |
 
 ## 数据存储说明
 
-- 全部数据存于浏览器 IndexedDB（Dexie，库名 `gbdrillcore-db`），表：`holes`、`runs`、`boxes`、`lithos`、`meta`。
-- `db.version(1)` 建表声明索引；`db.version(2).upgrade(...)` 为岩性表增加 `[holeId+fromDepth]` 复合索引并回填历史 RQD。升级前可用顶栏「导出备份」导出全量 JSON。
-- 首次打开且表为空时写入一批示例编目数据（`src/utils/seed.ts`，5 个钻孔 + 回次 + 岩芯箱 + 岩性区间）。
+- 全部数据存于浏览器 IndexedDB（Dexie，库名 `gbdrillcore-db`），表：`holes`、`runs`、`boxes`、`lithos`、`samples`、`meta`。
+- `db.version(1)` 建表声明索引；`db.version(2).upgrade(...)` 为岩性表增加 `[holeId+fromDepth]` 复合索引并回填历史 RQD；`db.version(3)` 新增送检台账表 `samples`（`sampleNo` 唯一索引，同一编号不能重复登记）。升级前可用顶栏「导出备份」导出全量 JSON。
+- 首次打开且表为空时写入一批示例编目数据（`src/utils/seed.ts`，5 个钻孔 + 回次 + 岩芯箱 + 岩性区间 + 各状态送检记录）。
 - 容器无状态：不使用数据库服务、不挂载命名卷，`docker compose down` 后数据仍留在浏览器中。
